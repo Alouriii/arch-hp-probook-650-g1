@@ -1,93 +1,93 @@
 #!/bin/bash
 # ============================================
-# سكربت تثبيت Arch Linux على HP ProBook 650 G1
+# Arch Linux Installation Script for HP ProBook 650 G1
 # ============================================
 
-set -e  # إيقاف التنفيذ عند أي خطأ
+set -e  # Stop execution on any error
 
-# الألوان للعرض
+# Display Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # ============================================
-# التحقق من التشغيل كـ root
+# Check for root execution
 # ============================================
 if [[ $EUID -ne 0 ]]; then
-   echo -e "${RED}هذا السكربت يجب تشغيله كـ root${NC}"
+   echo -e "${RED}This script must be run as root${NC}"
    exit 1
 fi
 
 # ============================================
-# إعدادات الجهاز
+# Device Settings
 # ============================================
-DISK="/dev/sda"           # القرص الرئيسي (تأكد منه!)
-HOSTNAME="probook-arch"   # اسم الجهاز
-USERNAME="user"           # اسم المستخدم (غيره)
-TIMEZONE="Asia/Riyadh"    # المنطقة الزمنية
+DISK="/dev/sda"           # Main Disk (Verify this!)
+HOSTNAME="probook-arch"   # Hostname
+USERNAME="user"           # Username (Change it)
+TIMEZONE="Asia/Riyadh"    # Timezone
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  تثبيت Arch Linux على HP ProBook 650 G1${NC}"
+echo -e "${GREEN}  Installing Arch Linux on HP ProBook 650 G1${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
 # ============================================
-# التحقق من UEFI
+# Check UEFI
 # ============================================
-echo -e "${YELLOW}[1/10] التحقق من وضع UEFI...${NC}"
+echo -e "${YELLOW}[1/10] Checking UEFI mode...${NC}"
 if [[ ! -d /sys/firmware/efi/efivars ]]; then
-    echo -e "${RED}خطأ: لم يتم التمهيد في وضع UEFI!${NC}"
-    echo -e "أعد التشغيل واضبط BIOS على UEFI Mode"
+    echo -e "${RED}Error: Not booted in UEFI mode!${NC}"
+    echo -e "Reboot and set BIOS to UEFI Mode"
     exit 1
 fi
-echo -e "${GREEN}✓ UEFI متوفر${NC}"
+echo -e "${GREEN}✓ UEFI available${NC}"
 
 # ============================================
-# الاتصال بالشبكة
+# Network Connection
 # ============================================
-echo -e "${YELLOW}[2/10] التحقق من الاتصال بالشبكة...${NC}"
+echo -e "${YELLOW}[2/10] Checking network connection...${NC}"
 if ! ping -c 1 archlinux.org &> /dev/null; then
-    echo -e "${RED}لا يوجد اتصال بالشبكة!${NC}"
-    echo "اضبط الشبكة يدوياً باستخدام: iwctl أو dhcpcd"
+    echo -e "${RED}No network connection!${NC}"
+    echo "Set up network manually using: iwctl or dhcpcd"
     exit 1
 fi
-echo -e "${GREEN}✓ متصل بالشبكة${NC}"
+echo -e "${GREEN}✓ Connected to network${NC}"
 
 # ============================================
-# تحديث الساعة
+# Update Clock
 # ============================================
-echo -e "${YELLOW}[3/10] تحديث الساعة...${NC}"
+echo -e "${YELLOW}[3/10] Updating clock...${NC}"
 timedatectl set-ntp true
 timedatectl status
-echo -e "${GREEN}✓ تم تحديث الساعة${NC}"
+echo -e "${GREEN}✓ Clock updated${NC}"
 
 # ============================================
-# تقسيم القرص (GPT/UEFI)
+# Disk Partitioning (GPT/UEFI)
 # ============================================
-echo -e "${YELLOW}[4/10] تقسيم القرص...${NC}"
-echo -e "${RED}تحذير: سيتم مسح جميع البيانات على $DISK!${NC}"
-read -p "هل أنت متأكد؟ اكتب YES للمتابعة: " confirm
+echo -e "${YELLOW}[4/10] Partitioning disk...${NC}"
+echo -e "${RED}Warning: All data on $DISK will be erased!${NC}"
+read -p "Are you sure? Type YES to continue: " confirm
 if [[ $confirm != "YES" ]]; then
-    echo "تم إلغاء التثبيت"
+    echo "Installation cancelled"
     exit 1
 fi
 
-# مسح القرص وإنشاء تقسيم جديد
+# Erase disk and create new partition table
 wipefs -af "$DISK"
 sgdisk -Z "$DISK"
 
-# إنشاء الأقسام
+# Create partitions
 sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System" "$DISK"      # EFI
 sgdisk -n 2:0:+8G -t 2:8200 -c 2:"Linux Swap" "$DISK"        # Swap
 sgdisk -n 3:0:+100G -t 3:8300 -c 3:"Arch Linux" "$DISK"      # Root
 sgdisk -n 4:0:0 -t 4:8300 -c 4:"Home" "$DISK"                # Home
 
-# تحديث جدول الأقسام
+# Update partition table
 partprobe "$DISK"
 sleep 2
 
-# تحديد أسماء الأقسام
+# Determine partition names
 if [[ "$DISK" == *"nvme"* ]]; then
     EFI="${DISK}p1"
     SWAP="${DISK}p2"
@@ -100,13 +100,13 @@ else
     HOME="${DISK}4"
 fi
 
-echo -e "${GREEN}✓ تم إنشاء الأقسام:${NC}"
+echo -e "${GREEN}✓ Partitions created:${NC}"
 lsblk "$DISK"
 
 # ============================================
-# تهيئة الأقسام
+# Format Partitions
 # ============================================
-echo -e "${YELLOW}[5/10] تهيئة الأقسام...${NC}"
+echo -e "${YELLOW}[5/10] Formatting partitions...${NC}"
 
 mkfs.fat -F32 -n EFI "$EFI"
 mkswap -L Swap "$SWAP"
@@ -115,12 +115,12 @@ mkfs.ext4 -L ArchHome "$HOME"
 
 swapon "$SWAP"
 
-echo -e "${GREEN}✓ تم تهيئة الأقسام${NC}"
+echo -e "${GREEN}✓ Partitions formatted${NC}"
 
 # ============================================
-# تركيب الأقسام
+# Mount Partitions
 # ============================================
-echo -e "${YELLOW}[6/10] تركيب الأقسام...${NC}"
+echo -e "${YELLOW}[6/10] Mounting partitions...${NC}"
 
 mount "$ROOT" /mnt
 mkdir -p /mnt/boot/efi
@@ -128,13 +128,13 @@ mkdir -p /mnt/home
 mount "$EFI" /mnt/boot/efi
 mount "$HOME" /mnt/home
 
-echo -e "${GREEN}✓ تم تركيب الأقسام${NC}"
+echo -e "${GREEN}✓ Partitions mounted${NC}"
 df -h
 
 # ============================================
-# تثبيت النظام الأساسي
+# Install Base System
 # ============================================
-echo -e "${YELLOW}[7/10] تثبيت النظام الأساسي...${NC}"
+echo -e "${YELLOW}[7/10] Installing base system...${NC}"
 
 pacstrap -K /mnt base base-devel linux linux-firmware \
     intel-ucode vim nano networkmanager sudo grub efibootmgr \
@@ -148,37 +148,37 @@ pacstrap -K /mnt base base-devel linux linux-firmware \
     broadcom-wl-dkms linux-headers \
     dhcpcd iwd
 
-echo -e "${GREEN}✓ تم تثبيت النظام الأساسي${NC}"
+echo -e "${GREEN}✓ Base system installed${NC}"
 
 # ============================================
-# إعداد fstab
+# Setup fstab
 # ============================================
-echo -e "${YELLOW}[8/10] إعداد fstab...${NC}"
+echo -e "${YELLOW}[8/10] Setting up fstab...${NC}"
 genfstab -U /mnt >> /mnt/etc/fstab
 cat /mnt/etc/fstab
-echo -e "${GREEN}✓ تم إعداد fstab${NC}"
+echo -e "${GREEN}✓ fstab configured${NC}"
 
 # ============================================
-# إعدادات النظام داخل chroot
+# System Configuration inside chroot
 # ============================================
-echo -e "${YELLOW}[9/10] إعدادات النظام...${NC}"
+echo -e "${YELLOW}[9/10] System configuration...${NC}"
 
 arch-chroot /mnt /bin/bash <<CHROOT_EOF
 
-# المنطقة الزمنية
+# Timezone
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
 
-# اللغة
+# Language
 echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
 echo "ar_SA.UTF-8 UTF-8" >> /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
-# لوحة المفاتيح
+# Keyboard
 echo "KEYMAP=us" > /etc/vconsole.conf
 
-# اسم الجهاز
+# Hostname
 echo "$HOSTNAME" > /etc/hostname
 
 # hosts
@@ -188,55 +188,55 @@ cat > /etc/hosts <<EOF
 127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
 EOF
 
-# كلمة مرور root
+# root password
 echo "root:123456" | chpasswd
 
-# إنشاء المستخدم
+# Create user
 useradd -m -G wheel,audio,video,storage,network,power -s /bin/bash "$USERNAME"
 echo "$USERNAME:123456" | chpasswd
 
 # sudo
 echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
 
-# تفعيل الخدمات
+# Enable services
 systemctl enable NetworkManager
 systemctl enable tlp
 systemctl enable dhcpcd
 
 CHROOT_EOF
 
-echo -e "${GREEN}✓ تم إعداد النظام${NC}"
+echo -e "${GREEN}✓ System configured${NC}"
 
 # ============================================
-# تثبيت GRUB مع حل مشكلة HP
+# Install GRUB with HP Fix
 # ============================================
-echo -e "${YELLOW}[10/10] تثبيت GRUB...${NC}"
+echo -e "${YELLOW}[10/10] Installing GRUB...${NC}"
 
 arch-chroot /mnt /bin/bash <<CHROOT_EOF
 
-# تثبيت GRUB
+# Install GRUB
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 
-# الحل السحري لمشكلة HP: نسخ GRUB إلى مسار Windows
+# Magic fix for HP problem: copy GRUB to Windows path
 mkdir -p /boot/efi/EFI/Microsoft/Boot
 cp /boot/efi/EFI/grub/grubx64.efi /boot/efi/EFI/Microsoft/Boot/bootmgfw.efi
 
-# إنشاء إعداد GRUB
+# Create GRUB config
 grub-mkconfig -o /boot/grub/grub.cfg
 
 CHROOT_EOF
 
-echo -e "${GREEN}✓ تم تثبيت GRUB${NC}"
+echo -e "${GREEN}✓ GRUB installed${NC}"
 
 # ============================================
-# نسخ سكربت ما بعد التثبيت
+# Copy Post-Install Script
 # ============================================
-echo -e "${YELLOW}نسخ سكربت ما بعد التثبيت...${NC}"
+echo -e "${YELLOW}Copying post-install script...${NC}"
 
 cat > /mnt/home/$USERNAME/post-install.sh <<'POSTEOF'
 #!/bin/bash
 # ============================================
-# سكربت ما بعد التثبيت - HP ProBook 650 G1
+# Post-Install Script - HP ProBook 650 G1
 # ============================================
 
 set -e
@@ -246,13 +246,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  إعدادات ما بعد التثبيت${NC}"
+echo -e "${GREEN}  Post-Installation Settings${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 # ============================================
-# إعدادات Intel Graphics
+# Intel Graphics Settings
 # ============================================
-echo -e "${YELLOW}[1/6] إعدادات Intel Graphics...${NC}"
+echo -e "${YELLOW}[1/6] Intel Graphics settings...${NC}"
 
 sudo mkdir -p /etc/X11/xorg.conf.d/
 
@@ -266,92 +266,92 @@ Section "Device"
 EndSection
 EOF
 
-echo -e "${GREEN}✓ تم إعداد Intel Graphics${NC}"
+echo -e "${GREEN}✓ Intel Graphics configured${NC}"
 
 # ============================================
-# إصلاح مشكلة الإغلاق/الاستيقاظ
+# Fix Shutdown/Wakeup Problem
 # ============================================
-echo -e "${YELLOW}[2/6] إصلاح مشكلة الإغلاق...${NC}"
+echo -e "${YELLOW}[2/6] Fixing shutdown problem...${NC}"
 
 sudo tee /etc/modprobe.d/blacklist.conf > /dev/null <<EOF
-# إصلاح مشكلة استيقاظ HP ProBook 650 G1 فوراً بعد الإغلاق
+# Fix HP ProBook 650 G1 wakeup immediately after shutdown
 blacklist hp-wmi
 EOF
 
-echo -e "${GREEN}✓ تم إصلاح مشكلة الإغلاق${NC}"
+echo -e "${GREEN}✓ Shutdown problem fixed${NC}"
 
 # ============================================
-# إعدادات Kernel لـ Suspend/Hibernate
+# Kernel Settings for Suspend/Hibernate
 # ============================================
-echo -e "${YELLOW}[3/6] إعدادات Kernel...${NC}"
+echo -e "${YELLOW}[3/6] Kernel settings...${NC}"
 
 sudo sed -i 's/^MODULES=(/MODULES=(intel_agp i915 /' /etc/mkinitcpio.conf
 sudo mkinitcpio -P
 
-echo -e "${GREEN}✓ تم تحديث Kernel modules${NC}"
+echo -e "${GREEN}✓ Kernel modules updated${NC}"
 
 # ============================================
-# إعدادات النظام
+# System Settings
 # ============================================
-echo -e "${YELLOW}[4/6] إعدادات النظام...${NC}"
+echo -e "${YELLOW}[4/6] System settings...${NC}"
 
 sudo tee /etc/sysctl.d/99-sysctl.conf > /dev/null <<EOF
-# تحسين الأداء
+# Performance optimization
 vm.swappiness=10
 vm.vfs_cache_pressure=50
 EOF
 
-echo -e "${GREEN}✓ تم إعدادات النظام${NC}"
+echo -e "${GREEN}✓ System settings configured${NC}"
 
 # ============================================
-# تثبيت بيئة سطح المكتب (اختياري)
+# Install Desktop Environment (Optional)
 # ============================================
-echo -e "${YELLOW}[5/6] اختيار بيئة سطح المكتب...${NC}"
+echo -e "${YELLOW}[5/6] Choosing Desktop Environment...${NC}"
 
-echo "اختر بيئة سطح المكتب:"
-echo "1) XFCE (خفيفة وسريعة)"
-echo "2) KDE Plasma (جميلة وكاملة)"
-echo "3) GNOME (حديثة وبسيطة)"
-echo "4) i3 (للمستخدمين المتقدمين)"
-echo "5) لا شيء (سطر أوامر فقط)"
+echo "Choose Desktop Environment:"
+echo "1) XFCE (Light and fast)"
+echo "2) KDE Plasma (Beautiful and complete)"
+echo "3) GNOME (Modern and simple)"
+echo "4) i3 (For advanced users)"
+echo "5) None (Command line only)"
 
-read -p "اختر رقم (1-5): " choice
+read -p "Choose a number (1-5): " choice
 
 case $choice in
     1)
-        echo "تثبيت XFCE..."
+        echo "Installing XFCE..."
         sudo pacman -S --noconfirm xfce4 xfce4-goodies lightdm lightdm-gtk-greeter
         sudo systemctl enable lightdm
         ;;
     2)
-        echo "تثبيت KDE Plasma..."
+        echo "Installing KDE Plasma..."
         sudo pacman -S --noconfirm plasma-meta kde-applications sddm
         sudo systemctl enable sddm
         ;;
     3)
-        echo "تثبيت GNOME..."
+        echo "Installing GNOME..."
         sudo pacman -S --noconfirm gnome gnome-tweaks gdm
         sudo systemctl enable gdm
         ;;
     4)
-        echo "تثبيت i3..."
+        echo "Installing i3..."
         sudo pacman -S --noconfirm i3 dmenu rxvt-unicode lightdm lightdm-gtk-greeter
         sudo systemctl enable lightdm
         ;;
     5)
-        echo "تم تخطي بيئة سطح المكتب"
+        echo "Desktop Environment skipped"
         ;;
     *)
-        echo "اختيار غير صحيح، تخطي"
+        echo "Invalid choice, skipping"
         ;;
 esac
 
-echo -e "${GREEN}✓ تم تثبيت بيئة سطح المكتب${NC}"
+echo -e "${GREEN}✓ Desktop Environment installed${NC}"
 
 # ============================================
-# تثبيت برامج إضافية
+# Install Additional Software
 # ============================================
-echo -e "${YELLOW}[6/6] تثبيت برامج إضافية...${NC}"
+echo -e "${YELLOW}[6/6] Installing additional software...${NC}"
 
 sudo pacman -S --noconfirm \
     firefox \
@@ -369,61 +369,61 @@ sudo pacman -S --noconfirm \
     ntfs-3g \
     exfat-utils
 
-# إنشاء مجلدات المستخدم
+# Create user directories
 xdg-user-dirs-update
 
-echo -e "${GREEN}✓ تم تثبيت البرامج الإضافية${NC}"
+echo -e "${GREEN}✓ Additional software installed${NC}"
 
 # ============================================
-# اختبار النظام
+# System Test
 # ============================================
-echo -e "${YELLOW}اختبار النظام...${NC}"
+echo -e "${YELLOW}Testing system...${NC}"
 
-echo "معلومات الرسوميات:"
-glxinfo | grep "OpenGL renderer" || echo "غير متوفر (قم بتثبيت mesa-utils)"
+echo "Graphics Information:"
+glxinfo | grep "OpenGL renderer" || echo "Not available (install mesa-utils)"
 
 echo ""
-echo "حالة الشبكة:"
+echo "Network Status:"
 ip link show
 
 echo ""
-echo "حالة البطارية:"
-cat /sys/class/power_supply/BAT*/status 2>/dev/null || echo "لا توجد بطارية"
+echo "Battery Status:"
+cat /sys/class/power_supply/BAT*/status 2>/dev/null || echo "No battery found"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  تم الانتهاء!${NC}"
+echo -e "${GREEN}  Finished!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "ملاحظات مهمة:"
-echo "1. كلمة المرور الافتراضية: 123456"
-echo "2. قم بتغيير كلمة المرور فوراً: passwd"
-echo "3. أعد التشغيل للدخول للنظام الجديد"
+echo "Important Notes:"
+echo "1. Default password: 123456"
+echo "2. Change password immediately: passwd"
+echo "3. Reboot to enter the new system"
 echo ""
-echo "للتحديث المستقبلي استخدم: sudo pacman -Syu"
+echo "For future updates use: sudo pacman -Syu"
 
 POSTEOF
 
 chmod +x /mnt/home/$USERNAME/post-install.sh
 chown $USERNAME:$USERNAME /mnt/home/$USERNAME/post-install.sh
 
-echo -e "${GREEN}✓ تم نسخ سكربت ما بعد التثبيت إلى /home/$USERNAME/${NC}"
+echo -e "${GREEN}✓ Post-install script copied to /home/$USERNAME/${NC}"
 
 # ============================================
-# الانتهاء
+# Finish
 # ============================================
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  تم التثبيت بنجاح!${NC}"
+echo -e "${GREEN}  Installation Successful!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "الخطوات التالية:"
-echo "1. اخرج من chroot: exit"
-echo "2. افصل الأقسام: umount -R /mnt"
-echo "3. أعد التشغيل: reboot"
+echo "Next Steps:"
+echo "1. Exit chroot: exit"
+echo "2. Unmount partitions: umount -R /mnt"
+echo "3. Reboot: reboot"
 echo ""
-echo "بعد الدخول للنظام الجديد:"
-echo "1. سجل الدخول باسم المستخدم: $USERNAME"
-echo "2. شغل سكربت ما بعد التثبيت: ./post-install.sh"
-echo "3. اتبع التعليمات لإكمال الإعداد"
+echo "After entering the new system:"
+echo "1. Login with username: $USERNAME"
+echo "2. Run post-install script: ./post-install.sh"
+echo "3. Follow instructions to complete setup"
 echo ""
-echo "ملاحظة: كلمة المرور الافتراضية هي '123456'"
-echo -e "${YELLOW}تغيير كلمة المرور موصى به فوراً!${NC}"
+echo "Note: Default password is '123456'"
+echo -e "${YELLOW}Password change recommended immediately!${NC}"
